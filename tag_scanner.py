@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # coding=utf-8
 __author__ = "Luis Bañuelos"
 __license__ = "MIT"
@@ -21,7 +22,7 @@ def ble_evt_gap_scan_response(sender, args):
 
 def main():
 	# port configuration
-	port_name = "com11"
+	port_name = "/dev/ttyACM0"
 	baud_rate = 115200
 	packet_mode = False
 
