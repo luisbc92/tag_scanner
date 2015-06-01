@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# coding = utf-8
+# coding=utf-8
 __author__	= "Luis Carlos Bañuelos Chacon"
 __license__ = "TBD"
 __version__	= "06/01/2015"
