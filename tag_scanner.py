@@ -1,17 +1,9 @@
 #!/usr/bin/env python
-<<<<<<< HEAD
 # coding = utf-8
 __author__	= "Luis Carlos Bañuelos Chacon"
 __license__ = "TBD"
 __version__	= "06/01/2015"
 __email__	= "luiscarlos.banuelos@gmail.com"
-=======
-# coding=utf-8
-__author__ = "Luis Bañuelos"
-__license__ = "MIT"
-__version__ = "2015-05-28"
-__email__ = "luiscarlos.banuelos@gmail.com"
->>>>>>> 919ccaa674161ce485679735d25fd763fdaa1d2d
 
 import bglib, serial, re
 
