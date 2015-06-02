@@ -7,8 +7,42 @@ __email__   = "luiscarlos.banuelos@gmail.com"
 
 import bglib, serial, re, time
 
+# Configuration
+BLE_PORT = "/dev/ttyACM0"
+BLE_BAUD = 115200
+XBEE_PORT = "/dev/ttySER0"
+XBEE_BAUD = 9600
+
+ser_ble  = serial.Serial(BLE_PORT, BLE_PORT, timeout = 1)
+xbee_ble = serial.Serial(XBEE_PORT, XBEE_BAUD, timeout = 1)
+
 tag_discovered = []     # MAC addresses of identified tags
-tag_data = []               # data collected from tags
+tag_data = []           # data collected from tags
+
+# function to enter xbee command mode
+def xbee_atmode(ser):
+    time.sleep(1)                   # guard time
+    ser.write("+++")                # enter AT
+    time.sleep(1)                   # guard time
+    if (xbee_read(ser) == 'OK\r"):  # get confirmation
+        return True
+    else:
+        return False
+
+# function to read xbee command responses
+def xbee_read(ser):
+    eol = b'\r'
+    leneol = len(eol)
+    line = bytearray()
+    while True:
+        c = ser.read(1)
+        if c:
+            line += c
+            if line[-leneol:] == eol:
+                break
+        else:
+            break
+    return bytes(line)
 
 # function to get MAC address of a network interface (Linux only)
 def get_mac(interface):
@@ -69,14 +103,9 @@ def main():
     # welcome message
     print "-----Tag Scanner-----"
 
-    # port configuration
-    port_name = "/dev/ttyACM0"
-    baud_rate = 115200
-    packet_mode = False
-
     # create BGLib object
     ble = bglib.BGLib()
-    ble.packet_mode = packet_mode
+    ble.packet_mode = False
 
     # add handler for BGAPI timeout condition
     ble.on_timeout += ble_parser_timeout
@@ -84,30 +113,29 @@ def main():
     # add handler for gap_scan_response event
     ble.ble_evt_gap_scan_response += ble_evt_gap_scan_response
 
-    # create serial port object and flush buffers
-    ser = serial.Serial(port=port_name, baudrate=baud_rate, timeout = 1)
-    ser.flushInput()
-    ser.flushOutput()
+    # flush serial buffers
+    ser_ble.flushInput()
+    ser_ble.flushOutput()
 
     # disconnect if connected already
-    ble.send_command(ser, ble.ble_cmd_connection_disconnect(0))
-    ble.check_activity(ser, 1)
+    ble.send_command(ser_ble, ble.ble_cmd_connection_disconnect(0))
+    ble.check_activity(ser_ble, 1)
 
     # stop advertising if advertising already
-    ble.send_command(ser, ble.ble_cmd_gap_set_mode(0, 0))
-    ble.check_activity(ser, 1)
+    ble.send_command(ser_ble, ble.ble_cmd_gap_set_mode(0, 0))
+    ble.check_activity(ser_ble, 1)
 
     # set scan parameters (scan_interval, scan_window, active)
-    ble.send_command(ser, ble.ble_cmd_gap_set_scan_parameters(0xC8, 0xC8, 1))
-    ble.check_activity(ser, 1)
+    ble.send_command(ser_ble, ble.ble_cmd_gap_set_scan_parameters(0xC8, 0xC8, 1))
+    ble.check_activity(ser_ble, 1)
 
     # start scanning now (mode)
-    ble.send_command(ser, ble.ble_cmd_gap_discover(1))
-    ble.check_activity(ser, 1)
+    ble.send_command(ser_ble, ble.ble_cmd_gap_discover(1))
+    ble.check_activity(ser_ble, 1)
 
     while (1):
         # check for all incoming data (no timeout, non-blocking)
-        ble.check_activity(ser)
+        ble.check_activity(ser_ble)
 
         if (len(tag_data) > 10):
             print create_packet()
