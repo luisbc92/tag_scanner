@@ -24,7 +24,7 @@ def xbee_atmode(ser):
     time.sleep(1)                   # guard time
     ser.write("+++")                # enter AT
     time.sleep(1)                   # guard time
-    if (xbee_read(ser) == 'OK\r"):  # get confirmation
+    if (xbee_read(ser) == "OK\r"):  # get confirmation
         return True
     else:
         return False
