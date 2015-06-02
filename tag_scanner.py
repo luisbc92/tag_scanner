@@ -66,6 +66,9 @@ def create_packet():
 def main():
     global tag_data
 
+    # welcome message
+    print "-----Tag Scanner-----"
+
     # port configuration
     port_name = "/dev/ttyACM0"
     baud_rate = 115200
