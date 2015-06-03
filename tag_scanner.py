@@ -5,7 +5,7 @@ __license__ = "TBD"
 __version__ = "06/01/2015"
 __email__   = "luiscarlos.banuelos@gmail.com"
 
-import bglib, serial, re, time, pickle
+import bglib, serial, re, time, json
 
 # Configuration
 BLE_PORT    = "/dev/ttyACM0"
@@ -14,8 +14,8 @@ XBEE_PORT   = "/dev/ttyAMA0"
 XBEE_BAUD   = 9600
 MESH_ID     = "1234"  # Xbee DigiMesh Network ID (0x0000 - 0xFFFF)
 MESH_CH     = "0C"    # Xbee DigiMesh Channel ## (0x0C - 0x17)
-MESH_DH     = "0000"  # Default destination channel to be replaced by AG (Aggregate node)
-MESH_DL     = "FFFF"  # Default destination channel to be replaced by AG (Aggregate node)
+MESH_DH     = "00000000"  # Default destination channel to be replaced by AG (Aggregate node)
+MESH_DL     = "0000FFFF"  # Default destination channel to be replaced by AG (Aggregate node)
 
 
 ser_ble  = serial.Serial(BLE_PORT, BLE_BAUD, timeout = 1)
@@ -91,7 +91,7 @@ def ble_evt_gap_scan_response(sender, args):
             rx["rssi"]  = args["rssi"]                      # RSSI
             rx["data"]  = args["data"][2:29]                # data payload
             tag_data.append(rx)                             # append received packet
-            print rx
+            #print rx
 
 # function to prepare packet for transmission
 def create_packet():
@@ -122,9 +122,9 @@ def main():
         print xbee_read(ser_xbee)
         ser_xbee.write("ATDL %s\r" %MESH_DL)    # mesh DL
         print xbee_read(ser_xbee)
-        ser_xbee.write("ATWR")                  # write configuration
+        ser_xbee.write("ATAC\r")                  # write configuration
         print xbee_read(ser_xbee)
-        ser_xbee.write("ATCN")                  # exit command mode
+        ser_xbee.write("ATCN\r")                  # exit command mode
 
     # create BGLib object
     ble = bglib.BGLib()
@@ -163,8 +163,9 @@ def main():
         if (len(tag_data) > 5):
             print "Sending data..."
             ser_xbee.write("<<<")
-            ser_xbee.write(pickle.dumps(create_packet()))
+            ser_xbee.write(json.dumps(create_packet()))
             ser_xbee.write("\r")
+            #print json.dumps(create_packet())
             tag_data = []
 
         time.sleep(0.01)
