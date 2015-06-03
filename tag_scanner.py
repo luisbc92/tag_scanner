@@ -5,16 +5,21 @@ __license__ = "TBD"
 __version__ = "06/01/2015"
 __email__   = "luiscarlos.banuelos@gmail.com"
 
-import bglib, serial, re, time
+import bglib, serial, re, time, pickle
 
 # Configuration
-BLE_PORT = "/dev/ttyACM0"
-BLE_BAUD = 115200
-XBEE_PORT = "/dev/ttySER0"
-XBEE_BAUD = 9600
+BLE_PORT    = "/dev/ttyACM0"
+BLE_BAUD    = 115200
+XBEE_PORT   = "/dev/ttyAMA0"
+XBEE_BAUD   = 9600
+MESH_ID     = "1234"  # Xbee DigiMesh Network ID (0x0000 - 0xFFFF)
+MESH_CH     = "0C"    # Xbee DigiMesh Channel ## (0x0C - 0x17)
+MESH_DH     = "0000"  # Default destination channel to be replaced by AG (Aggregate node)
+MESH_DL     = "FFFF"  # Default destination channel to be replaced by AG (Aggregate node)
 
-ser_ble  = serial.Serial(BLE_PORT, BLE_PORT, timeout = 1)
-xbee_ble = serial.Serial(XBEE_PORT, XBEE_BAUD, timeout = 1)
+
+ser_ble  = serial.Serial(BLE_PORT, BLE_BAUD, timeout = 1)
+ser_xbee = serial.Serial(XBEE_PORT, XBEE_BAUD, timeout = 1)
 
 tag_discovered = []     # MAC addresses of identified tags
 tag_data = []           # data collected from tags
@@ -101,7 +106,25 @@ def main():
     global tag_data
 
     # welcome message
-    print "-----Tag Scanner-----"
+    print "[Tag Scanner]"
+
+    # configure Xbee 
+    ser_xbee.flushInput()
+    ser_xbee.flushOutput()
+    if xbee_atmode(ser_xbee):
+        ser_xbee.write("ATCE 0\r")              # router
+        print xbee_read(ser_xbee)
+        ser_xbee.write("ATID %s\r" %MESH_ID)    # mesh ID
+        print xbee_read(ser_xbee)
+        ser_xbee.write("ATCH %s\r" %MESH_CH)    # mesh CH
+        print xbee_read(ser_xbee)
+        ser_xbee.write("ATDH %s\r" %MESH_DH)    # mesh DH
+        print xbee_read(ser_xbee)
+        ser_xbee.write("ATDL %s\r" %MESH_DL)    # mesh DL
+        print xbee_read(ser_xbee)
+        ser_xbee.write("ATWR")                  # write configuration
+        print xbee_read(ser_xbee)
+        ser_xbee.write("ATCN")                  # exit command mode
 
     # create BGLib object
     ble = bglib.BGLib()
@@ -137,8 +160,11 @@ def main():
         # check for all incoming data (no timeout, non-blocking)
         ble.check_activity(ser_ble)
 
-        if (len(tag_data) > 10):
-            print create_packet()
+        if (len(tag_data) > 5):
+            print "Sending data..."
+            ser_xbee.write("<<<")
+            ser_xbee.write(pickle.dumps(create_packet()))
+            ser_xbee.write("\r")
             tag_data = []
 
         time.sleep(0.01)
