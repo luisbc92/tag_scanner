@@ -5,49 +5,46 @@ __license__ = "TBD"
 __version__ = "06/01/2015"
 __email__   = "luiscarlos.banuelos@gmail.com"
 
-import bglib, serial, re, time, json
+from xbee import DigiMesh
+from random import randint
+import bglib
+import serial
+import re
+import time
+import json
 
 # Configuration
 BLE_PORT    = "/dev/ttyACM0"
 BLE_BAUD    = 115200
 XBEE_PORT   = "/dev/ttyAMA0"
 XBEE_BAUD   = 9600
-MESH_ID     = "1234"  # Xbee DigiMesh Network ID (0x0000 - 0xFFFF)
-MESH_CH     = "0C"    # Xbee DigiMesh Channel ## (0x0C - 0x17)
-MESH_DH     = "00000000"  # Default destination channel to be replaced by AG (Aggregate node)
-MESH_DL     = "0000FFFF"  # Default destination channel to be replaced by AG (Aggregate node)
-
+XBEE_MESH_ID    = "1234"    # Xbee DigiMesh Network ID (0x0000 - 0xFFFF)
+XBEE_MESH_CH    = "0C"      # Xbee DigiMesh Channel ## (0x0C - 0x17)
+XBEE_MESH_DH    = "0"       # Default destination
+XBEE_MESH_DL    = "FFFF"    # Default destination
+XBEE_MESH_DESC  = "\x00\x00\x00\x00\x00\x00\xFF\xFF"    # Escaped Destination
 
 ser_ble  = serial.Serial(BLE_PORT, BLE_BAUD, timeout = 1)
 ser_xbee = serial.Serial(XBEE_PORT, XBEE_BAUD, timeout = 1)
+xbee = DigiMesh(ser_xbee)
 
 tag_discovered = []     # MAC addresses of identified tags
 tag_data = []           # data collected from tags
 
-# function to enter xbee command mode
-def xbee_atmode(ser):
-    time.sleep(1)                   # guard time
-    ser.write("+++")                # enter AT
-    time.sleep(1)                   # guard time
-    if (xbee_read(ser) == "OK\r"):  # get confirmation
-        return True
-    else:
-        return False
-
-# function to read xbee command responses
-def xbee_read(ser):
-    eol = b'\r'
-    leneol = len(eol)
-    line = bytearray()
-    while True:
-        c = ser.read(1)
-        if c:
-            line += c
-            if line[-leneol:] == eol:
-                break
-        else:
-            break
-    return bytes(line)
+# divides packet into Xbee MTU and sends
+# packet structure {"id", "pn", "dt"}
+# all packets share an id generated from hashing the data to send
+# the header packet has the total packets to be sent as data
+# pn is the packet number (used to join the packets), the header is 0
+def packet_send(string):
+    random_id = hash(string) % 768 + randint(0, 256)    # get and ID by hashing the string
+    packet_num = 1                          # starting number (from data)
+    for piece in [string[x:x+32] for x in range(0,len(string),32)]:         # divide string, create and send packets
+        packet = {"id": random_id, "pn": packet_num, "dt": piece}           # compose data packet
+        xbee.send("tx", dest_addr=XBEE_MESH_DESC, data=json.dumps(packet))  # serialize and send
+        packet_num += 1                     # increase packet count
+    packet = {"id": random_id, "pn": 0, "dt": packet_num}   # compose header packet
+    xbee.send("tx", dest_addr=XBEE_MESH_DESC, data=json.dumps(packet))      # serialize and send
 
 # function to get MAC address of a network interface (Linux only)
 def get_mac(interface):
@@ -108,23 +105,22 @@ def main():
     # welcome message
     print "[Tag Scanner]"
 
-    # configure Xbee 
-    ser_xbee.flushInput()
-    ser_xbee.flushOutput()
-    if xbee_atmode(ser_xbee):
-        ser_xbee.write("ATCE 0\r")              # router
-        print xbee_read(ser_xbee)
-        ser_xbee.write("ATID %s\r" %MESH_ID)    # mesh ID
-        print xbee_read(ser_xbee)
-        ser_xbee.write("ATCH %s\r" %MESH_CH)    # mesh CH
-        print xbee_read(ser_xbee)
-        ser_xbee.write("ATDH %s\r" %MESH_DH)    # mesh DH
-        print xbee_read(ser_xbee)
-        ser_xbee.write("ATDL %s\r" %MESH_DL)    # mesh DL
-        print xbee_read(ser_xbee)
-        ser_xbee.write("ATAC\r")                  # write configuration
-        print xbee_read(ser_xbee)
-        ser_xbee.write("ATCN\r")                  # exit command mode
+    # Switch to API Mode
+    time.sleep(1)
+    ser_xbee.write("+++")               # enter command mode
+    time.sleep(1)
+    if (ser_xbee.read(3) == "OK\r"):
+        ser_xbee.write("ATAP 1\r")      # switch to API mode
+        ser_xbee.write("ATAC\r")        # apply settings
+        ser_xbee.write("ATCN\r")        # exit command mode 
+
+    # Configure Xbee
+    xbee.at(command="CE", parameter="0")            # router mode
+    xbee.at(command="ID", parameter=XBEE_MESH_ID)   # mesh id 
+    xbee.at(command="CH", parameter=XBEE_MESH_CH)   # mesh channel
+    xbee.at(command="DH", parameter=XBEE_MESH_DH)   # mesh id 
+    xbee.at(command="DL", parameter=XBEE_MESH_DL)   # mesh channel
+    xbee.at(command="AC")                           # apply
 
     # create BGLib object
     ble = bglib.BGLib()
@@ -162,10 +158,7 @@ def main():
 
         if (len(tag_data) > 5):
             print "Sending data..."
-            ser_xbee.write("<<<")
-            ser_xbee.write(json.dumps(create_packet()))
-            ser_xbee.write("\r")
-            #print json.dumps(create_packet())
+            packet_send(json.dumps(create_packet()))
             tag_data = []
 
         time.sleep(0.01)
